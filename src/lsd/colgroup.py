@@ -593,7 +593,7 @@ class ColGroup(object):
 		return self
 
 
-def fromiter(it, dtype=None, blocks=False):
+def fromiter(it, dtype=None, blocks=False, maxsize=np.inf):
 	"""
 	Load a ColGroup from an iterable.
 	"""
@@ -610,9 +610,13 @@ def fromiter(it, dtype=None, blocks=False):
 			if at2 > len(buf):
 				# Next higher power of two
 				newsize = 1 << int(np.ceil(np.log2(at2)))
+				newsize = np.int(min([newsize, maxsize]))
 				buf.resize(newsize)
 
 			# append
+			# too big
+			if at2 > len(buf):
+				raise RuntimeError('Array is too big!')
 			buf[at:at+len(rows)] = rows
 			at = at + len(rows)
 
