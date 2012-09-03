@@ -463,13 +463,17 @@ def import_from_smf_aux(file, det_table, exp_table, det_c2f, exp_c2f, survey):
 
 	# Store the primary and all chip headers in external linked files
 	uri = 'lsd:%s:hdr:%s/primary.txt' % (exp_table.name, fn)
-	with exp_table.open_uri(uri, mode='w') as f:
-		f.write(str(imhdr) + '\n')
-		exp_cols['hdr']	= np.array([uri], dtype=object)
+	towrite = []
+	exp_cols['hdr']	= np.array([uri], dtype=object)
+	towrite.append((uri, str(imhdr) + '\n'))
+	#with exp_table.open_uri(uri, mode='w') as f:
+	#	f.write(str(imhdr) + '\n')
 
 	exp_cols['chip_hdr']	= np.empty(1, dtype='64O')
 	exp_cols['chip_hdr'][:] = None
 	
+
+
 	exp_cols['survey']      = np.empty(1, dtype='a4')
 	exp_cols['survey'][:]   = survey
 	nrows = 0
@@ -485,13 +489,17 @@ def import_from_smf_aux(file, det_table, exp_table, det_c2f, exp_c2f, survey):
 			hdr = hdus[i].header
 			
 			uri = 'lsd:%s:hdr:%s/%s.txt' % (exp_table.name, fn, chip_xy)
-			with exp_table.open_uri(uri, mode='w') as f:
-				f.write(str(hdr) + '\n')
-				exp_cols['chip_hdr'][0][chip_id] = uri
-
-			dat = hdus[chip_xy + '.psf'].data
-			if dat is not None:
-				nrows = nrows + len(dat)
+			exp_cols['chip_hdr'][0][chip_id] = uri
+			towrite.append((uri, str(hdr) + '\n'))
+			#with exp_table.open_uri(uri, mode='w') as f:
+			#	f.write(str(hdr) + '\n')
+			try:
+				dat = hdus[chip_xy + '.psf'].data
+				if dat is not None:
+					nrows = nrows + len(dat)
+			except ValueError as e:
+				print >>sys.stderr, '  ===> Warning: %s failed to read in; skipping this file.  Got the following error on open: %s' % (file, str(e))
+				return
 
 	### Detections
 	filterid = imhdr['FILTERID']
@@ -506,6 +514,10 @@ def import_from_smf_aux(file, det_table, exp_table, det_c2f, exp_c2f, survey):
 				continue
 		except KeyError:
 			continue
+		except ValueError as e:
+			print >>sys.stderr, '  ===> Warning: %s failed to read in; skipping this file.  Got the following error on open: %s' % (file, str(e))
+			return
+
 
 		# Slurp all columns from FITS to 
 		det_cols, nullcols  = load_columns_from_data(dat, det_c2f, det_c2t)
@@ -537,6 +549,11 @@ def import_from_smf_aux(file, det_table, exp_table, det_c2f, exp_c2f, survey):
 			det_cols_all[col][at:at+len(det_cols[col])] = det_cols[col]
 		at = at + len(det_cols['exp_id'])
 	assert at == nrows
+
+	# we made it here, so we can safely write:
+	for uri, dat in towrite:
+		with exp_table.open_uri(uri, mode='w') as f:
+			f.write(dat)
 
 	(exp_id,) = exp_table.append(exp_cols)
 	det_cols_all['exp_id'][:] = exp_id

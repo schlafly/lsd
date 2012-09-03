@@ -624,7 +624,8 @@ def fromiter(it, dtype=None, blocks=False, maxsize=np.inf):
 	if buf is not None:
 		buf.resize(at)
 	else:
-		buf = ColGroup(dtype=dtype, size=0)
+		if dtype is not None:
+			buf = ColGroup(dtype=dtype, size=0)
 
 	return buf
 

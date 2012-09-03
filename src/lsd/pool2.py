@@ -267,7 +267,8 @@ class Pool:
 		for p in self.ps:
 			try:
 				os.kill(p.pid, signal.SIGINT)
-			except OSError:
+				# TypeError on p.pid = None; signal that they died
+			except OSError, TypeError:
 				pass
 
 		# Wait for it to take effect (5 sec, with 0.1sec pooling interval)
@@ -540,7 +541,8 @@ class Pool:
 		if progress_callback != None:
 			progress_callback('mapreduce', 'end', None, None, None)
 
-	def map_reduce_chain(self, input, kernels, progress_callback=None):
+	def map_reduce_chain(self, input, kernels, progress_callback=None,
+			     back_to_disk=back_to_disk):
 		""" A poor-man's map-reduce implementation.
 		
 		    Calls the mapper for each value in the <input> iterable. 

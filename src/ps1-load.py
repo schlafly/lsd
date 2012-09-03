@@ -133,6 +133,7 @@ class Updater(object):
 		print "Loading new data"
 
 		newsmf = [ s.strip() for s in open(self.new_filelist).xreadlines() ]
+		nworkers = str(os.environ.get('NWORKERS', ''))
 		if len(newsmf) != 0:
 			pp = r"""
 			#!/bin/bash
@@ -144,9 +145,10 @@ class Updater(object):
 
 			export LSD_DB={db}
 			export PIXLEVEL=6
+			export NWORKERS={nworkers}
 
 			{lsd_prefix}lsd-import-smf -c -f $SURVEY ps1_det ps1_exp $SMFLIST > {logdir}/ingest.log 2>&1
-			""".format(db=self.dbpath, survey=self.survey, logdir=self.logdir, smffiles=self.new_filelist, environ_source=self.environ_source, lsd_prefix=self.lsd_prefix)
+			""".format(db=self.dbpath, survey=self.survey, logdir=self.logdir, smffiles=self.new_filelist, environ_source=self.environ_source, lsd_prefix=self.lsd_prefix, nworkers=nworkers)
 
 			pp = textwrap.dedent(pp).lstrip()
 			with open(self.ingest_sh, 'w') as fp: fp.write(pp)
@@ -291,6 +293,7 @@ class Updater(object):
 		print "Building object catalog"
 
 		newsmf = [ s.strip() for s in open(self.new_filelist).xreadlines() ]
+		nworkers = str(os.environ.get('NWORKERS', ''))
 		if len(newsmf) != 0:
 			pp = r"""
 			#!/bin/bash
@@ -298,9 +301,10 @@ class Updater(object):
 			{environ_source}
 
 			export LSD_DB={db}
+			export NWORKERS={nworkers}
 
 			{lsd_prefix}lsd-make-object-catalog --auto --fov-radius=2 ps1_obj ps1_det ps1_exp  > {logdir}/build_objects.log 2>&1
-			""".format(db=self.dbpath, logdir=self.logdir, environ_source=self.environ_source, lsd_prefix=self.lsd_prefix)
+			""".format(db=self.dbpath, logdir=self.logdir, environ_source=self.environ_source, lsd_prefix=self.lsd_prefix, nworkers=nworkers)
 			pp = textwrap.dedent(pp).lstrip()
 
 			with open(self.build_objects_sh, 'w') as fp: fp.write(pp)

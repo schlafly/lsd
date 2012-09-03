@@ -41,7 +41,10 @@ class DustMap(object):
 
 		if dir is None:
 			from .. import config
-			dir = os.getenv('DUST_DIR', os.path.join(config.data_dir, 'sfd-dust-maps'))
+			if os.getenv('DUST_DIR', None) is None:
+				dir = os.path.join(config.data_dir, 'sfd-dust-maps')
+			else:
+				dir = os.path.join(os.getenv('DUST_DIR'), 'maps')
 
 		fname = os.path.join(dir, fname)
 		if not os.access(fname+'_ngp.fits', os.F_OK):
