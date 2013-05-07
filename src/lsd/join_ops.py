@@ -1870,7 +1870,7 @@ class DB(object):
 		if uri[:4] != 'lsd:':
 			# Interpret this as a general URL
 			import urllib
-
+			
 			f = urllib.urlopen(uri)
 			yield f
 

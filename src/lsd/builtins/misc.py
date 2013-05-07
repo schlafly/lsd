@@ -76,7 +76,7 @@ def _fits_quickparse(header):
 		val = line[at+1:].strip()
 		if val[0] == "'":
 			# string
-			val = val[1:val[1:].find("'")]
+			val = val[1:val[1:].find("'")+1]
 		else:
 			# number or T/F
 			at = val.find('/')

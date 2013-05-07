@@ -744,7 +744,7 @@ def partitioned_fromiter(it, keycol, maxrows, dtype=None, blocks=False):
 				at += len(rows)
 			assert at == len(buf)
 
-			print >>sys.stderr, "YIELD", len(buf)
+			#print >>sys.stderr, "YIELD", len(buf)
 			yield buf
 	finally:
 		if fp is not None:
