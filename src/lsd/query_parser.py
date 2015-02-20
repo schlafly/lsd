@@ -83,13 +83,17 @@ def parse(query):
 			col = ''
 			while token.lower() not in ['', ',', 'where', 'as', 'from']:
 				col = col + token
-				if token == '(':
+				if token == '(' or token == '[':
+					tokendict = { ')':'(', ']':'['}
+					startdelimiters = [ token ]
 					# find matching ')'
-					pt = 1
-					while pt:
+					while len(startdelimiters) > 0:
 						(_, token, _, _, _) = next(g)
-						if token == '(': pt = pt + 1
-						if token == ')': pt = pt - 1
+						if token in tokendict.values():
+							startdelimiters.append(token)
+						if token in tokendict.keys():
+							if tokendict[token] != startdelimiters.pop():
+								raise ValueError('mismatched parentheses')
 						col = col + token
 				(_, token, _, _, _) = next(g)
 
@@ -228,7 +232,6 @@ def parse(query):
 	except list as dummy:
 	#except StopIteration:
 		pass
-
 	return (select_clause, where_clause, from_clause, into_clause)
 
 def resolve_wildcards(select_clause, tablecols):

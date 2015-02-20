@@ -15,6 +15,8 @@ import logging
 from interval import intervalset
 import bounds
 import locking
+import ps1_astrom # EFS
+import pdb
 
 logger = logging.getLogger("lsd.smf")
 
@@ -163,6 +165,9 @@ det_table_def = \
 				('ap_mag',		'f4', 'ap_mag',			''),
 				('ap_mag_raw',		'f4', 'ap_mag_raw',		''),
 				('ap_mag_radius',	'f4', 'ap_mag_radius',		''),
+				('ap_flux',             'f4', 'ap_flux',                ''),
+				('ap_flux_sig',         'f4', 'ap_flux_sig',            ''),
+				('ap_npix',             'i4', 'ap_npix',                ''),
 				('peak_flux_as_mag',	'f4', 'peak_flux_as_mag',	''),
 				('cal_psf_mag',		'f4', 'cal_psf_mag',		''),
 				('cal_psf_mag_sig',	'f4', 'cal_psf_mag_sig',	''),
@@ -172,6 +177,9 @@ det_table_def = \
 			'columns': [
 				('sky',			'f4', 'sky',			''),
 				('sky_sigma',		'f4', 'sky_sigma',		''),
+				('sky_limit_rad',	'f4', 'sky_limit_rad',		''),
+				('sky_limit_flux',	'f4', 'sky_limit_flux',		''),
+				('sky_limit_slope',	'f4', 'sky_limit_slope',	''),
 				('psf_chisq',		'f4', 'psf_chisq',		''),
 				('cr_nsigma',		'f4', 'cr_nsigma',		''),
 				('ext_nsigma',		'f4', 'ext_nsigma',		''),
@@ -182,6 +190,9 @@ det_table_def = \
 				('psf_qf_perfect',	'f4', 'psf_qf_perfect',		''),
 				('psf_ndof',		'u4', 'psf_ndof',		''),
 				('psf_npix',		'u4', 'psf_npix',		''),
+				('psf_core',		'f4', 'psf_core',		''),
+				('psf_fwhm_maj',	'f4', 'psf_fwhm_maj',		''),
+				('psf_fwhm_min',	'f4', 'psf_fwhm_min',		''),
 			],
 		},
 		'moments': {
@@ -335,6 +346,8 @@ def import_from_smf(db, det_tabname, exp_tabname, smf_files, survey, create=Fals
 	smf_fns = []
 	exp_ids = []
 	for (file, exp_id, smf_fn, nloaded, nin) in pool.imap_unordered(smf_files, import_from_smf_aux, (det_table, exp_table, det_c2f, exp_c2f, survey), progress_callback=pool2.progress_pass):
+		if nin == -1:
+			continue
 		smf_fns.append(smf_fn)
 		exp_ids.append(exp_id)
 		at = at + 1
@@ -382,13 +395,20 @@ def load_columns_from_header(hdr, c2f, c2t):
 	for (name, fitsname) in c2f.iteritems():
 		if fitsname == '': pass
 		try:
-			cols[name] = np.array([ hdr[fitsname] ])
+			cols[name] = np.array([ hdr[fitsname] ], dtype=c2t[name])
 		except KeyError:
 			cols[name] = np.zeros(1, dtype=c2t[name])
 			nullkeys.append(name)
 			if(cols[name].dtype.kind == 'f'):
 				cols[name][:] = np.nan
 			#print "Key %s does not exist in header." % (fitsname,)
+		except ValueError:
+			cols[name] = np.zeros(1, dtype=c2t[name])
+			nullkeys.append(name)
+			if(cols[name].dtype.kind == 'f'):
+				cols[name][:] = np.nan
+			print "Key %s has inappropriate value in header %s." % (name, fitsname,)
+			print name, hdr[fitsname]
 	return cols, nullkeys
 
 def all_chips():
@@ -424,22 +444,30 @@ def fix_ps1_coord_bugs(cols, file, hduname):
 	cols['ra'], cols['dec'] = ra, dec
 
 	# Remove any NaN rows
-	if np.isnan(cols['ra'].sum()):
+	if np.any(~np.isfinite(cols['ra'])):
 		logger.warning("Encountered %d instances of ra == NaN in file %s, %s HDU. Removing those rows." % (sum(np.isnan(ra)), file, hduname))
-		keep = ~np.isnan(cols['ra'])
+		keep = np.isfinite(cols['ra'])
 		for name in cols: cols[name] = cols[name][keep]
 
-	if np.isnan(cols['dec'].sum()):
+	if np.any(~np.isfinite(cols['dec'])):
 		logger.warning("Encountered %d instances of dec == NaN in file %s, %s HDU. Removing those rows." % (sum(np.isnan(dec)), file, hduname))
-		keep = ~np.isnan(cols['dec'])
+		keep = np.isfinite(cols['dec'])
 		for name in cols: cols[name] = cols[name][keep]
 
-def import_from_smf_aux(file, det_table, exp_table, det_c2f, exp_c2f, survey):
+def import_from_smf_aux(file, det_table, exp_table, det_c2f, exp_c2f, survey, fix_astrom=True):
+	print >>sys.stderr, '  ===> Importing %s' % file # nice to have something at the beginning to find what files trigger bugs...
 	det_c2t = gen_tab2type(det_table_def)
 	exp_c2t = gen_tab2type(exp_table_def)
 
 	# Load the .smf file
-	hdus = pyfits.open(file)
+	try:
+		hdus = pyfits.open(file)
+	except Exception as e:
+		print >>sys.stderr, '  ===> Warning: %s failed to read in; skipping this file.  Got the following error on open: %s' % (file, str(e))
+		return ((file, np.zeros(0), 'failure', -1, -1),)
+		
+	if fix_astrom: # bug in PV2 ra / dec values means that these are off by a lot; header astrometry is fine, however, so recompute from x_psf, y_psf, and header information.
+		smfcoords = ps1_astrom.readsmfcoords(file)
 
 	# Do the exposure table entry first; we'll need the
 	# image ID to fill in the detections table
@@ -497,17 +525,17 @@ def import_from_smf_aux(file, det_table, exp_table, det_c2f, exp_c2f, survey):
 				dat = hdus[chip_xy + '.psf'].data
 				if dat is not None:
 					nrows = nrows + len(dat)
-			except ValueError as e:
+			except Exception as e:
 				print >>sys.stderr, '  ===> Warning: %s failed to read in; skipping this file.  Got the following error on open: %s' % (file, str(e))
-				return
+				return ((file, np.zeros(0), 'failure', -1, -1),)
 
 	### Detections
 	filterid = imhdr['FILTERID']
 	mjd_obs  = imhdr['MJD-OBS']
 	det_cols_all = None
 	at = 0
+	removed = 0
 	for (idx, (chip_id, chip_xy)) in enumerate(all_chips()):
-
 		try:	
 			dat = hdus[chip_xy + '.psf'].data
 			if dat is None:
@@ -516,25 +544,35 @@ def import_from_smf_aux(file, det_table, exp_table, det_c2f, exp_c2f, survey):
 			continue
 		except ValueError as e:
 			print >>sys.stderr, '  ===> Warning: %s failed to read in; skipping this file.  Got the following error on open: %s' % (file, str(e))
-			return
-
+			return ((file, np.zeros(0), 'failure', -1, -1),)
 
 		# Slurp all columns from FITS to 
 		det_cols, nullcols  = load_columns_from_data(dat, det_c2f, det_c2t)
+		if fix_astrom:
+			try:
+				rnew, dnew = ps1_astrom.xy_to_rd(dat['x_psf'], dat['y_psf'], smfcoords[chip_xy], smfcoords['PRIMARY'])
+				det_cols['ra'][:] = rnew
+				det_cols['dec'][:] = dnew
+			except Exception as e:
+				print 'Got exception fixing astrometry of file %s %s: %s' % (file, chip_xy, e)
+				det_cols['ra'][:] = np.nan
+				det_cols['dec'][:] = np.nan
+				
 
 		# Record any columns that were not found
 		if len(nullcols):
 			exp_cols['notfound_cols'][0][chip_id] = nullcols
 
 		fix_ps1_coord_bugs(det_cols, file, chip_xy + '.psf')
+		removed += len(dat) - len(det_cols['ra'])
 
 		# Add computed columns
 		add_lb(det_cols)
-		det_cols['filterid']    = np.empty(len(dat), dtype='a6')
-		det_cols['survey']      = np.empty(len(dat), dtype='a4')
-		det_cols['mjd_obs']     = np.empty(len(dat), dtype='f8')
-		det_cols['exp_id']      = np.empty(len(dat), dtype='u8')
-		det_cols['chip_id']     = np.empty(len(dat), dtype='u1')
+		det_cols['filterid']    = np.empty(len(det_cols['ra']), dtype='a6')
+		det_cols['survey']      = np.empty(len(det_cols['ra']), dtype='a4')
+		det_cols['mjd_obs']     = np.empty(len(det_cols['ra']), dtype='f8')
+		det_cols['exp_id']      = np.empty(len(det_cols['ra']), dtype='u8')
+		det_cols['chip_id']     = np.empty(len(det_cols['ra']), dtype='u1')
 		det_cols['filterid'][:] = filterid
 		det_cols['survey'][:]   = survey
 		det_cols['mjd_obs'][:]  = mjd_obs
@@ -548,7 +586,10 @@ def import_from_smf_aux(file, det_table, exp_table, det_c2f, exp_c2f, survey):
 		for col in det_cols_all:
 			det_cols_all[col][at:at+len(det_cols[col])] = det_cols[col]
 		at = at + len(det_cols['exp_id'])
-	assert at == nrows
+	assert at == nrows - removed
+	if removed > 0:
+		for col in det_cols_all:
+			det_cols_all[col] = det_cols_all[col][:nrows-removed].copy()
 
 	# we made it here, so we can safely write:
 	for uri, dat in towrite:
@@ -560,7 +601,7 @@ def import_from_smf_aux(file, det_table, exp_table, det_c2f, exp_c2f, survey):
 
 	ids = det_table.append(det_cols_all)
 
-	yield (file, exp_id, fn, len(ids), len(ids))
+	return ((file, exp_id, fn, len(ids), len(ids)),)
 
 #########
 

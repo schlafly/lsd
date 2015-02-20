@@ -41,7 +41,7 @@ def galequ(l, b):
 	ra  = np.arctan2(cb*cl, sb*_ce-cb*_se*sl) + _angp
 	dec = np.arcsin(cb*_ce*sl + sb*_se)
 
-	ra = np.where(ra < 0, ra + 2.*np.pi, ra)
+	ra = np.where(ra < 0, ra + 2.*np.pi, ra) % (2.*np.pi)
 
 	ra = np.degrees(ra)
 	dec = np.degrees(dec)

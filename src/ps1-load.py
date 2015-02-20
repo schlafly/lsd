@@ -12,6 +12,7 @@ import shutil
 import re
 import time
 from collections import defaultdict
+import pdb
 
 class Updater(object):
 	auto_logdir = False
@@ -114,15 +115,17 @@ class Updater(object):
 				#print '[%s]' % fn, id, ver
 				yield (path, id, ver)
 
-		indb = dict((id, fn) for (fn, id, _) in parse_paths(dbsmf))
+		#indb = dict((id, fn) for (fn, id, cid) in parse_paths(dbsmf))
+		indb = dict((cid, fn) for (fn, id, cid) in parse_paths(dbsmf))
 		assert len(indb) == len(dbsmf)
 
 		# Keep only the files not in the database
-		newcat = list((id, ver, fn) for (fn, id, ver) in parse_paths(catsmf) if id not in indb)
+		#newcat = list((id, cid, fn) for (fn, id, cid) in parse_paths(catsmf) if id not in indb)
+		newcat = list((id, cid, fn) for (fn, id, cid) in parse_paths(catsmf) if cid not in indb)
 		print "\tNew SMF files (incl. duplicates): %d" % len(newcat)
 
 		# Keep only the newest version of each file (if there are duplicates
-		newcat = dict((id, (ver, fn)) for (id, ver, fn) in sorted(newcat))
+		newcat = dict((id, (cid, fn)) for (id, cid, fn) in sorted(newcat))
 		print "\tNew SMF files (w/o duplicates): %d" % len(newcat)
 
 		with open(self.new_filelist, 'w') as fp:
@@ -293,7 +296,8 @@ class Updater(object):
 		print "Building object catalog"
 
 		newsmf = [ s.strip() for s in open(self.new_filelist).xreadlines() ]
-		nworkers = str(os.environ.get('NWORKERS', ''))
+		nworkersorig = str(os.environ.get('NWORKERS', ''))
+		nworkers = str(os.environ.get('NWORKERSOBJ', nworkersorig))
 		if len(newsmf) != 0:
 			pp = r"""
 			#!/bin/bash
@@ -337,7 +341,7 @@ parser.add_argument('--db', default=os.getenv('LSD_DB', None), type=str, help='P
 parser.add_argument('--stages', default=all_stages, type=csv_arg,
 	help='Execute only the specified import stages (comma separated list). Available stages are: '
 	+ ', '.join(all_stages1))
-parser.add_argument('--environ-script', default="~mjuric/projects/lsd/scripts/lsd-setup-odyssey.sh", type=str, help='Script that will set up the LSD environment')
+parser.add_argument('--environ-script', default="~/lsd-setup-odyssey.sh", type=str, help='Script that will set up the LSD environment')
 parser.add_argument('--lsd-bin', default=None, type=str, help='Path to LSD binaries, if they\'re not in $PATH')
 parser.add_argument('--logdir', default=None, type=str, help='Directory where intermediate scripts and logs \
 will be generated and stored. If left unspecified, a directory with a timestamp-based name will be autocreated.')
@@ -346,6 +350,7 @@ args = parser.parse_args()
 
 stages = args.stages
 u = Updater(survey=args.survey, dbpath=args.db, catpath=' '.join(args.smf_path), environ_script=args.environ_script, lsd_bin=args.lsd_bin, logdir=args.logdir)
+
 
 # Execute all requested stages
 for k, s in enumerate(stages):

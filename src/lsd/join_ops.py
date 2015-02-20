@@ -6,7 +6,7 @@ Contains (among others) DB, Query, QueryEngine and QueryInstance classes, as
 well as the JOIN machinery.
 
 """
-import os, json, glob, copy, sys
+import os, json, glob, copy, sys, pdb
 import numpy as np
 import cPickle
 import pyfits
@@ -782,7 +782,8 @@ class QueryInstance(object):
 			#     column names from 'name' by appending [0], [1], ...
 
 			if isinstance(cols, utils.NamedList):
-				asnames = cols.names
+				if not asnames:
+					asnames = cols.names
 				cols = tuple(cols)
 
 			if getattr(cols, 'dtype', None) is not None and cols.dtype.names is not None:
@@ -1507,7 +1508,6 @@ class Query(object):
 		# Insert our feeder mapper into the kernel chain
 		kernels = list(kernels)
 		kernels[0] = (_mapper, kernels[0], self.qengine, include_cached)
-
 		# Append a writer mapper if the query has an INTO clause
 		if self.qwriter:
 			kernels.append((_into_writer, self.qwriter))
