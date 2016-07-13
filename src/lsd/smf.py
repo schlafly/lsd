@@ -918,7 +918,7 @@ def _obj_det_match(cells, db, obj_tabname, det_tabname, o2d_tabname, radius, exp
 	   	Implement a consistency check to verify that.
 	"""
 
-	from scikits.ann import kdtree
+	import kdtree_wrapper
 
 	# Input is a tuple of obj_cell, and det_cells falling under that obj_cell
 	obj_cell, det_cells = cells
@@ -1005,8 +1005,8 @@ def _obj_det_match(cells, db, obj_tabname, det_tabname, o2d_tabname, radius, exp
 				if tree is None or nobj_old != len(xyobj):
 					del tree
 					nobj_old = len(xyobj)
-					tree = kdtree(xyobj)
-				match_idx, match_d2 = tree.knn(xydet, 1)
+					tree = kdtree_wrapper.kdtree(xyobj)
+				match_idx, match_d2 = kdtree_wrapper.query(tree, xydet, 1)
 				match_idx = match_idx[:,0]		# First neighbor only
 
 				####

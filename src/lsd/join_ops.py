@@ -501,7 +501,7 @@ class CrossmatchJoin(JoinRelation):
 		# Cross-match, R x S
 		# Return objects (== rows) from S that are nearest neighbors of
 		# objects (== rows) in R
-		from scikits.ann import kdtree
+		import kdtree_wrapper
 		from utils import gnomonic, gc_dist
 
 		join = ColGroup(dtype=[('m1', 'u8'), ('m2', 'u8'), ('_DIST', 'f4'), ('_NR', 'u1')])
@@ -529,8 +529,9 @@ class CrossmatchJoin(JoinRelation):
 
 			# Construct kD-tree to find nearest neighbors from tableS
 			# for every object in tableR
-			tree = kdtree(xy2)
-			match_idxs, match_d2 = tree.knn(xy1, min(self.n, len(xy2)))
+			tree = kdtree_wrapper.kdtree(xy2)
+			num_nn = min(self.n, len(xy2))
+			match_idxs, match_d2 = kdtree_wrapper.query(tree, xy1, num_nn)
 			del tree
 
 			# Expand the matches into a table, with one row per neighbor
